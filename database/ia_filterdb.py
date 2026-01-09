@@ -42,6 +42,7 @@ class Media(Document):
     file_type = fields.StrField(allow_none=True)
     mime_type = fields.StrField(allow_none=True)
     caption = fields.StrField(allow_none=True)
+    cover = fields.StrField(allow_none=True)
 
     class Meta:
         indexes = ("$file_name",)
@@ -57,6 +58,8 @@ class Media2(Document):
     file_type = fields.StrField(allow_none=True)
     mime_type = fields.StrField(allow_none=True)
     caption = fields.StrField(allow_none=True)
+    cover = fields.StrField(allow_none=True)
+
 
     class Meta:
         indexes = ("$file_name",)
@@ -111,6 +114,7 @@ async def save_file(media):
                 "Error during MULTIPLE_DB check; defaulting to primary DB.", exc_info=e
             )
     try:
+        cover_to_use = getattr(getattr(media, "cover", None), "file_id", None)
         record = saveMedia(
             file_id=file_id,
             file_ref=file_ref,
@@ -119,9 +123,10 @@ async def save_file(media):
             file_type=media.file_type,
             mime_type=media.mime_type,
             caption=(media.caption.html if media.caption and INDEX_CAPTION else None),
+            cover=cover_to_use if COVERX else None,
         )
-    except ValidationError as e:
-        logger.exception(f"[VALIDATION ERROR] '{file_name}' → {e}")
+    except Exception as e:
+        logger.exception(f"[ERROR] '{file_name}' → {e}")
         return False, 2
     try:
         await record.commit()
@@ -135,7 +140,7 @@ async def save_file(media):
             f"[ERROR] Failed commit of '{file_name}' to {target_db} DB.", exc_info=e
         )
         return False, 3
-    logger.info(f"[SUCCESS] '{file_name}' saved to {target_db} DB.")
+    #logger.info(f"[SUCCESS] '{file_name}' saved to {target_db} DB.")
     return True, 1
 
 async def get_search_results(chat_id, query, file_type=None, max_results=None, offset=0, filter=False):
