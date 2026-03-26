@@ -21,8 +21,6 @@ from info import *
 from utils import get_settings, save_group_settings, is_subscribed, is_req_subscribed, get_size, get_shortlink, is_check_admin, temp, get_readable_time, get_time, generate_settings_text, log_error, clean_filename, get_random_mix_id
 import time
 
-
-
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
@@ -126,8 +124,11 @@ async def start(client, message):
             elif curr_time < 21:
                 gtxt = "ɢᴏᴏᴅ ᴇᴠᴇɴɪɴɢ 🌘"
             else:
-                gtxt = "ɢᴏᴏᴅ ɴɪɢʜᴛ 🌑"      
-            PIC = f"{random.choice(PICS)}?r={get_random_mix_id()}"
+                gtxt = "ɢᴏᴏᴅ ɴɪɢʜᴛ 🌑"
+            try:      
+                PIC = f"{random.choice(PICS_URL)}?r={get_random_mix_id()}"
+            except Exception:
+                PIC = random.choice(PICS)
             await message.reply_photo(
                 photo=PIC,
                 caption=script.START_TXT.format(message.from_user.mention, gtxt, temp.U_NAME, temp.B_NAME),
@@ -157,7 +158,10 @@ async def start(client, message):
                 gtxt = "ɢᴏᴏᴅ ᴇᴠᴇɴɪɴɢ 🌘"
             else:
                 gtxt = "ɢᴏᴏᴅ ɴɪɢʜᴛ 🌑"
-            PIC = f"{random.choice(PICS)}?r={get_random_mix_id()}"
+            try:
+                PIC = f"{random.choice(PICS_URL)}?r={get_random_mix_id()}"
+            except Exception:
+                PIC = random.choice(PICS)
             await message.reply_photo(
                 photo=PIC,
                 caption=script.START_TXT.format(message.from_user.mention, gtxt, temp.U_NAME, temp.B_NAME),
@@ -374,7 +378,14 @@ async def start(client, message):
         user = message.from_user.id
         settings = await get_settings(int(grp_id))
         if not files_:
-            pre, file_id = ((base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))).decode("utf-8")).split("_", 1)
+            raw = base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))
+            sep = raw.find(b"_")
+            if sep == -1:
+                raise ValueError("Invalid encoded data")
+            pre = raw[:sep].decode("ascii")
+            file_id = raw[sep + 1:].decode("latin1")
+        # if not files_:
+        #     pre, file_id = ((base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))).decode("utf-8")).split("_", 1)
             try:
                 cover = None
                 if COVERX:

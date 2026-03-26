@@ -6,6 +6,8 @@ import time
 from pyrogram.errors import FloodWait
 import asyncio
 from datetime import date, datetime
+from pathlib import Path
+import importlib.util
 import pytz
 from aiohttp import web
 from database.ia_filterdb import Media, Media2
@@ -33,17 +35,64 @@ logging.getLogger("pymongo").setLevel(logging.WARNING)
 
 botStartTime = time.time()
 
+def dreamxbotz_plugins_handler(app, plugins_dir: str | Path = "plugins", package_name: str = "plugins") -> list[str]:
+    plugins_dir = Path(plugins_dir)
+    loaded_plugins: list[str] = []
+
+    if not plugins_dir.exists():
+        logging.warning("Plugins Directory '%s' Does Not Exist.", plugins_dir)
+        return loaded_plugins
+
+    for file in sorted(plugins_dir.rglob("*.py")):
+        if file.name == "__init__.py":
+            continue
+
+        rel_path = file.relative_to(plugins_dir).with_suffix("")
+        import_path = package_name + ".".join([""] + list(rel_path.parts))
+
+        try:
+            spec = importlib.util.spec_from_file_location(import_path, file)
+            if spec is None or spec.loader is None:
+                logging.warning("Skipping %s (No Spec/Loader).", file)
+                continue
+
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            sys.modules[import_path] = module
+            loaded_plugins.append(import_path)
+
+            short_name = import_path.removeprefix(f"{package_name}.")
+            logging.info("🔌 Loaded plugin: %s", short_name)
+
+        except Exception:
+            logging.exception("Failed To Import Plugin: %s", import_path)
+
+    disp = getattr(app, "dispatcher", None)
+    if disp is None:
+        logging.warning("App Has No Dispatcher; Skipping Handler Regroup.")
+        return loaded_plugins
+
+    if 0 in disp.groups:
+        all_handlers = list(disp.groups[0])
+        for i, handler in enumerate(all_handlers):
+            disp.remove_handler(handler, group=0)
+            disp.add_handler(handler, group=i)
+    else:
+        logging.info("No Handlers In Group 0; Nothing To Regroup.")
+
+    return loaded_plugins
+
 async def dreamxbotz_start():
     print('\n\nInitalizing DreamxBotz')
     await dreamxbotz.start()
     bot_info = await dreamxbotz.get_me()
     dreamxbotz.username = bot_info.username
     await initialize_clients()
-    if 0 in dreamxbotz.dispatcher.groups:
-        all_handlers = list(dreamxbotz.dispatcher.groups[0])
-        for i, handler in enumerate(all_handlers):
-            dreamxbotz.dispatcher.remove_handler(handler, group=0)
-            dreamxbotz.dispatcher.add_handler(handler, group=i)
+    loaded_plugins = dreamxbotz_plugins_handler(dreamxbotz)
+    if loaded_plugins:
+        logging.info("✅ Plugins Loaded: %d", len(loaded_plugins))
+    else:
+        logging.info("⚠️ No Plugins Loaded.")
     if ON_HEROKU:
         asyncio.create_task(ping_server()) 
     b_users, b_chats = await db.get_banned()
